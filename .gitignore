@@ -1,0 +1,6 @@
+# ignore list
+
+*.conf
+*.tmp
+./tmp
+
