@@ -1,7 +1,11 @@
 #
 #
 #
-
+# checking nets
 $NETS{net1}	= '10.0.0.0/24';
 $NETS{net2}	= '10.1.0.0/29';
 $NETS{net3}	= '10.100.0.0/16';
+# checking ips
+$NETS{oneip1}	= '10.200.0.1';
+$NETS{oneip2}	= '10.200.0.10';
+$NETS{oneip3}	= '10.200.0.100';
