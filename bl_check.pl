@@ -7,6 +7,14 @@ use LWP::UserAgent;
 
 my %rkn;
 
+# Load config
+open CFG, "./bl_check.conf" or die "Create bl_check.conf";
+my $config  = join "",<CFG>;
+close CFG;
+eval $config;
+die "Couldn't interpret the configuration file.\nError details follow: $@\n" if $@;
+
+# load RKN list
 my $ua = LWP::UserAgent->new(ssl_opts => { verify_hostname => 1 });
 $ua->agent('Wget/1.12 (linux-gnu)');
 my $res = $ua->get("https://reestr.rublacklist.net/api/v2/ips/csv");
