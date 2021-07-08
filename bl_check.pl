@@ -99,7 +99,6 @@ sub check_sorbs {
 
 sub check_zapbl {
     my $addr = sprintf("%s.dnsbl.zapbl.net",inet_reverse(shift));
-    print $addr;
     my $packed_ip = gethostbyname($addr);
     if (defined $packed_ip) {
         return "ZAPBS_DNSBL ";
@@ -115,3 +114,23 @@ sub check_spfbl {
         }
     }
 }
+
+=head1 REPOSITORY
+
+L<https://github.com/whyberg/bl_check>
+
+=head1 DISCLAIMER OF WARRANTIES
+
+The software is provided "AS IS", without warranty of any kind, express or
+implied, including but not limited to the warranties of merchantability,
+fitness for a particular purpose and noninfringement. In no event shall the
+authors or copyright holders be liable for any claim, damages or other
+liability, whether in an action of contract, tort or otherwise, arising from,
+out of or in connection with the software or the use or other dealings in
+the software.
+
+=head1 AUTHOR
+
+Andrey Artemyev<whyberg@gmail.com>
+
+=cut
