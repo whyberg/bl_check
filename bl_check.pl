@@ -62,6 +62,7 @@ sub check {
               check_spfbl($addr).
               check_zapbl($addr).
               check_sorbs($addr).
+              check_spamrats($addr).
               check_rkn($addr);
     return $BLS;
 }
@@ -114,6 +115,20 @@ sub check_spfbl {
         }
     }
 }
+
+sub check_spamrats {
+    my $addr = sprintf("%s.all.spamrats.com",inet_reverse(shift));
+    my $packed_ip = gethostbyname($addr);
+    if (defined $packed_ip) {
+        if (inet_ntoa($packed_ip) eq "127.0.0.36" ) {
+            return "SPAMRATS_DYNA_DNSBL ";
+        }
+        if (inet_ntoa($packed_ip) eq "127.0.0.38" ) {
+            return "SPAMRATS_SPAM_DNSBL ";
+        }
+    }
+}
+
 
 =head1 REPOSITORY
 
