@@ -4,8 +4,11 @@ use warnings;
 
 use Socket;
 use LWP::UserAgent;
+use Net::DNS::Async;
+use Data::Dumper;
 
 my %NETS;
+my %RES;
 # Load config
 open CFG, "./bl_check.conf" or die "Create bl_check.conf";
 my $config  = join "",<CFG>;
@@ -23,6 +26,8 @@ foreach (split(",",$res->decoded_content)) {
     $_=~s/[\n\r]//g;
     $rkn{$_}=1;
 }
+
+my $c = new Net::DNS::Async(QueueSize => 100, Retries => 3);
 
 foreach (sort(keys(%NETS))) {
     my $full_mask  = unpack( "N", pack( "C4", 255,255,255,255 ) );
@@ -42,11 +47,14 @@ foreach (sort(keys(%NETS))) {
     }
     for (my $i=$net_start; $i<=$net_stop; $i+=1) {
         my $addr = inet_ntoa(pack("N",$i));
-        my $res = check($addr);
-        if ( $res ne "" ) {
-            printf("ip %s in lists %s\n",$addr,$res);
-        }
+        check($addr);
     }
+}
+
+$c->await();
+
+foreach (sort(keys %RES)) {
+    printf "%s in %s\n",$_ , join(" ",keys %{$RES{$_}});
 }
 
 sub inet_reverse {
@@ -57,78 +65,36 @@ sub inet_reverse {
 
 sub check {
     my $addr = shift;
-    my $BLS = check_barracudacentral($addr).
-              check_spamhaus($addr).
-              check_spfbl($addr).
-              check_zapbl($addr).
-              check_sorbs($addr).
-              check_spamrats($addr).
-              check_rkn($addr);
-    return $BLS;
+    check_dnsbl($addr,"b.barracudacentral.org","BARRACUDA_DNSBL");
+    check_dnsbl($addr,"zen.spamhaus.org","SPAMHAUS_DNSBL");
+    check_dnsbl($addr,"spam.dnsbl.sorbs.net","SORBS_DNSBL");
+    check_dnsbl($addr,"dnsbl.zapbl.net","ZAPBS_DNSBL");
+    check_dnsbl($addr,"dnsbl.spfbl.net","SPFBL_DNSBL");
+    check_dnsbl($addr,"all.spamrats.com","SPAMRATS_DNSBL");
+    check_rkn($addr);
 }
 
 sub check_rkn {
     my $addr = shift;
     if (defined($rkn{$addr})) {
-        return "RKN ";
-    }     
-}
-
-sub check_barracudacentral {
-    my $addr = sprintf("%s.b.barracudacentral.org",inet_reverse(shift));
-    my $packed_ip = gethostbyname($addr);
-    if (defined $packed_ip) {
-        return "BARRACUDA_DNSBL ";
+        $RES{$addr}->{RKN} = '1';
     }
 }
 
-sub check_spamhaus {
-    my $addr = sprintf("%s.zen.spamhaus.org",inet_reverse(shift));
-    my $packed_ip = gethostbyname($addr);
-    if (defined $packed_ip) {
-        return "SPAMHAUS_DNSBL ";
-    }
+sub check_dnsbl {
+    my $addr = shift;
+    my $domain = shift;
+    my $marker = shift;
+    $c->add( 
+        sub {
+            my $responce = shift;
+            if ( $responce->header->ancount > 0 ) {
+                my $ip = sprintf "%s",($responce->answer)[0]->address;
+                $RES{$addr}->{$marker} = $ip;
+            }
+        }, (sprintf("%s.%s",inet_reverse($addr),$domain))
+    );
 }
-
-sub check_sorbs {
-    my $addr = sprintf("%s.spam.dnsbl.sorbs.net",inet_reverse(shift));
-    my $packed_ip = gethostbyname($addr);
-    if (defined $packed_ip) {
-        return "SORBS_DNSBL ";
-    }
-}
-
-sub check_zapbl {
-    my $addr = sprintf("%s.dnsbl.zapbl.net",inet_reverse(shift));
-    my $packed_ip = gethostbyname($addr);
-    if (defined $packed_ip) {
-        return "ZAPBS_DNSBL ";
-    }
-}
-
-sub check_spfbl {
-    my $addr = sprintf("%s.dnsbl.spfbl.net",inet_reverse(shift));
-    my $packed_ip = gethostbyname($addr);
-    if (defined $packed_ip) {
-        if (inet_ntoa($packed_ip) eq "127.0.0.2") {
-            return "SPFBL_DNSBL ";
-        }
-    }
-}
-
-sub check_spamrats {
-    my $addr = sprintf("%s.all.spamrats.com",inet_reverse(shift));
-    my $packed_ip = gethostbyname($addr);
-    if (defined $packed_ip) {
-        if (inet_ntoa($packed_ip) eq "127.0.0.36" ) {
-            return "SPAMRATS_DYNA_DNSBL ";
-        }
-        if (inet_ntoa($packed_ip) eq "127.0.0.38" ) {
-            return "SPAMRATS_SPAM_DNSBL ";
-        }
-    }
-}
-
 
 =head1 REPOSITORY
 
