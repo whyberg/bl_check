@@ -8,7 +8,9 @@ use Net::DNS::Async;
 use Data::Dumper;
 
 my %NETS;
+my %DNSBL;
 my %RES;
+
 # Load config
 open CFG, "./bl_check.conf" or die "Create bl_check.conf";
 my $config  = join "",<CFG>;
@@ -17,15 +19,15 @@ eval $config;
 die "Couldn't interpret the configuration file.\nError details follow: $@\n" if $@;
 
 my %rkn;
-# load RKN list
-my $ua = LWP::UserAgent->new(ssl_opts => { verify_hostname => 1 });
-$ua->agent('Wget/1.12 (linux-gnu)');
-my $res = $ua->get("https://reestr.rublacklist.net/api/v2/ips/csv");
- die "Couldn't get rkn blacklist!" unless defined $res;
-foreach (split(",",$res->decoded_content)) {
-    $_=~s/[\n\r]//g;
-    $rkn{$_}=1;
-}
+## load RKN list
+#my $ua = LWP::UserAgent->new(ssl_opts => { verify_hostname => 1 });
+#$ua->agent('Wget/1.12 (linux-gnu)');
+#my $res = $ua->get("https://reestr.rublacklist.net/api/v2/ips/csv");
+# die "Couldn't get rkn blacklist!" unless defined $res;
+#foreach (split(",",$res->decoded_content)) {
+#    $_=~s/[\n\r]//g;
+#    $rkn{$_}=1;
+#}
 
 my $c = new Net::DNS::Async(QueueSize => 100, Retries => 3);
 
@@ -57,6 +59,15 @@ foreach (sort(keys %RES)) {
     printf "%s in %s\n",$_ , join(" ",keys %{$RES{$_}});
 }
 
+foreach (sort(keys %RES)) {
+    my $ip = $_;
+    printf "%s \n",$ip;
+    foreach (sort(keys %{$RES{$ip}})) {
+        printf "%5s %s\n","-->", $DNSBL{$_}->{code}->{$RES{$ip}{$_}};
+    }
+}
+
+
 sub inet_reverse {
     my $addr = shift;
     my @ip = split(/\./,$addr);
@@ -65,13 +76,10 @@ sub inet_reverse {
 
 sub check {
     my $addr = shift;
-    check_dnsbl($addr,"b.barracudacentral.org","BARRACUDA_DNSBL");
-    check_dnsbl($addr,"zen.spamhaus.org","SPAMHAUS_DNSBL");
-    check_dnsbl($addr,"spam.dnsbl.sorbs.net","SORBS_DNSBL");
-    check_dnsbl($addr,"dnsbl.zapbl.net","ZAPBS_DNSBL");
-    check_dnsbl($addr,"dnsbl.spfbl.net","SPFBL_DNSBL");
-    check_dnsbl($addr,"all.spamrats.com","SPAMRATS_DNSBL");
-    check_rkn($addr);
+    foreach (keys %DNSBL) {
+        check_dnsbl($addr, $_, $DNSBL{$_}->{service}, $DNSBL{$_}->{code});
+    }
+#    check_rkn($addr);
 }
 
 sub check_rkn {
@@ -83,14 +91,18 @@ sub check_rkn {
 
 sub check_dnsbl {
     my $addr = shift;
-    my $domain = shift;
     my $marker = shift;
-    $c->add( 
+    my $domain = shift;
+    my $code = shift;
+
+    $c->add(
         sub {
             my $responce = shift;
             if ( $responce->header->ancount > 0 ) {
                 my $ip = sprintf "%s",($responce->answer)[0]->address;
-                $RES{$addr}->{$marker} = $ip;
+                if ( defined(%$code{$ip}) ) {
+                    $RES{$addr}->{$marker} = $ip;
+                }
             }
         }, (sprintf("%s.%s",inet_reverse($addr),$domain))
     );
