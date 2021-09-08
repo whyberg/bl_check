@@ -5,7 +5,6 @@ use warnings;
 use Socket;
 use LWP::UserAgent;
 use Net::DNS::Async;
-use Data::Dumper;
 
 use Storable;
 
@@ -15,16 +14,50 @@ my %RES;
 my %rkn;
 my $c;
 my $resfilename = './bl_check.res';
+my $conffilename = 'bl_check.conf';
+
 my $extreport = 0;
+my $fastreport = 0;
+
+# extract command line
+for ( my $i = 0 ; $i <= $#ARGV ; $i++ ) {
+    my $valid = $ARGV[$i];
+    if ( substr( $ARGV[$i], 0, 1 ) ne '-' ) {
+        push(my @toplevel, $ARGV[$i] );
+        $valid = '';
+    }
+    elsif ( $ARGV[$i] eq '-c' ) {
+        $conffilename = $ARGV[ ++$i ];
+        $valid = '';
+    }
+    elsif ( $ARGV[$i] eq '-e' ) {
+        $extreport = 1;
+        $valid = '';
+    }
+    elsif ( $ARGV[$i] eq '-f' ) {
+        $fastreport = 1;
+        $valid = '';
+    }
+    elsif ( $ARGV[$i] eq '-h' ) {
+        usage();
+        exit;
+    }
+    if ($valid) {
+        print "Invalid option '$valid'\n";
+        usage();
+        exit;
+    }
+}
+
 
 # Load config
-open CFG, "./bl_check.conf" or die "Create bl_check.conf";
+open CFG, $conffilename or die "Config ".$conffilename." not found!\n";
 my $config  = join "",<CFG>;
 close CFG;
 eval $config;
 die "Couldn't interpret the configuration file.\nError details follow: $@\n" if $@;
 
-if ( -e $resfilename ) {
+if ( -e $resfilename and $fastreport ) {
     %RES = %{retrieve($resfilename)};
 } else {
     # load RKN list
@@ -120,6 +153,23 @@ sub check_dnsbl {
             }
         }, (sprintf("%s.%s",inet_reverse($addr),$domain))
     );
+}
+
+sub usage {
+    my $usage_t = qq{
+    Usage: bl_check.pl [OPTIONS]
+
+    Options:
+        -c [filename]
+            use [filename] as configuration file name (bl_check.conf default)
+        -e
+            show extended report
+        -f
+            use fast report
+        -h 
+            show this message
+    };
+    print $usage_t;
 }
 
 =head1 REPOSITORY
