@@ -29,3 +29,9 @@ Or if you prefer using apt:
 $ apt install libwww-perl
 $ apt install liblwp-protocol-https-perl
 ```
+## Usage
+
+Create config file from bl_check.conf.sample.
+
+Add your networks CIDRs
+
