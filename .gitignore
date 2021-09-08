@@ -3,4 +3,5 @@
 *.conf
 *.tmp
 ./tmp
+*.res
 

@@ -7,9 +7,15 @@ use LWP::UserAgent;
 use Net::DNS::Async;
 use Data::Dumper;
 
+use Storable;
+
 my %NETS;
-my %DNSBL;
+my %BL;
 my %RES;
+my %rkn;
+my $c;
+my $resfilename = './bl_check.res';
+my $extreport = 0;
 
 # Load config
 open CFG, "./bl_check.conf" or die "Create bl_check.conf";
@@ -18,55 +24,62 @@ close CFG;
 eval $config;
 die "Couldn't interpret the configuration file.\nError details follow: $@\n" if $@;
 
-my %rkn;
-## load RKN list
-#my $ua = LWP::UserAgent->new(ssl_opts => { verify_hostname => 1 });
-#$ua->agent('Wget/1.12 (linux-gnu)');
-#my $res = $ua->get("https://reestr.rublacklist.net/api/v2/ips/csv");
-# die "Couldn't get rkn blacklist!" unless defined $res;
-#foreach (split(",",$res->decoded_content)) {
-#    $_=~s/[\n\r]//g;
-#    $rkn{$_}=1;
-#}
-
-my $c = new Net::DNS::Async(QueueSize => 100, Retries => 3);
-
-foreach (sort(keys(%NETS))) {
-    my $full_mask  = unpack( "N", pack( "C4", 255,255,255,255 ) );
-    my $net_start;
-    my $net_stop;
-    my ($ip_t,$mask_t) = split("/",$NETS{$_});
-    if ( defined($mask_t) ) {
-        my $mask = 1;
-        $mask = ( 2 ** (32 - $mask_t) ) - 1;
-        $net_start = unpack("N",inet_aton($ip_t)) & ( $full_mask ^ $mask );
-        $net_stop = unpack("N",inet_aton($ip_t)) | $mask;
-        printf "Check range: from %s to %s\n",inet_ntoa(pack("N",$net_start)),inet_ntoa(pack("N",$net_stop));
-    } else {
-        $net_start = unpack("N",inet_aton($ip_t));
-        $net_stop = $net_start;
-        printf "Check ip: %s\n",inet_ntoa(pack("N",$net_start));
+if ( -e $resfilename ) {
+    %RES = %{retrieve($resfilename)};
+} else {
+    # load RKN list
+    my $ua = LWP::UserAgent->new(ssl_opts => { verify_hostname => 1 });
+    $ua->agent('Wget/1.12 (linux-gnu)');
+    my $res = $ua->get("https://reestr.rublacklist.net/api/v2/ips/csv");
+     die "Couldn't get rkn blacklist!" unless defined $res;
+    foreach (split(",",$res->decoded_content)) {
+        $_=~s/[\n\r]//g;
+        $rkn{$_}=1;
     }
-    for (my $i=$net_start; $i<=$net_stop; $i+=1) {
-        my $addr = inet_ntoa(pack("N",$i));
-        check($addr);
+
+    $c = new Net::DNS::Async(QueueSize => 100, Retries => 3);
+
+    foreach (sort(keys(%NETS))) {
+        my $full_mask  = unpack( "N", pack( "C4", 255,255,255,255 ) );
+        my $net_start;
+        my $net_stop;
+        my ($ip_t,$mask_t) = split("/",$NETS{$_});
+        if ( defined($mask_t) ) {
+            my $mask = 1;
+            $mask = ( 2 ** (32 - $mask_t) ) - 1;
+            $net_start = unpack("N",inet_aton($ip_t)) & ( $full_mask ^ $mask );
+            $net_stop = unpack("N",inet_aton($ip_t)) | $mask;
+            printf "Check range: from %s to %s\n",inet_ntoa(pack("N",$net_start)),inet_ntoa(pack("N",$net_stop));
+        } else {
+            $net_start = unpack("N",inet_aton($ip_t));
+            $net_stop = $net_start;
+            printf "Check ip: %s\n",inet_ntoa(pack("N",$net_start));
+        }
+        for (my $i=$net_start; $i<=$net_stop; $i+=1) {
+            my $addr = inet_ntoa(pack("N",$i));
+            check($addr);
+        }
     }
+    $c->await();
+
+    store \%RES, $resfilename;
 }
 
-$c->await();
+$BL{RKN}{code}{'1'} = 'Listed at RKN';
 
-foreach (sort(keys %RES)) {
-    printf "%s in %s\n",$_ , join(" ",keys %{$RES{$_}});
-}
-
-foreach (sort(keys %RES)) {
-    my $ip = $_;
-    printf "%s \n",$ip;
-    foreach (sort(keys %{$RES{$ip}})) {
-        printf "%5s %s\n","-->", $DNSBL{$_}->{code}->{$RES{$ip}{$_}};
+if ( $extreport == 0 ) {
+    foreach (sort(keys %RES)) {
+        printf "%s in %s\n",$_ , join(" ",keys %{$RES{$_}});
+    }
+} else {
+    foreach (sort(keys %RES)) {
+        my $ip = $_;
+        printf "%s \n",$ip;
+        foreach (sort(keys %{$RES{$ip}})) {
+            printf "%5s %s\n","-->", $BL{$_}->{code}->{$RES{$ip}{$_}};
+        }
     }
 }
-
 
 sub inet_reverse {
     my $addr = shift;
@@ -76,10 +89,11 @@ sub inet_reverse {
 
 sub check {
     my $addr = shift;
-    foreach (keys %DNSBL) {
-        check_dnsbl($addr, $_, $DNSBL{$_}->{service}, $DNSBL{$_}->{code});
+    foreach (keys %BL) {
+        check_dnsbl($addr, $_, $BL{$_}->{service}, $BL{$_}->{code});
     }
-#    check_rkn($addr);
+
+    check_rkn($addr);
 }
 
 sub check_rkn {
