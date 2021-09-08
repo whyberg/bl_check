@@ -1,5 +1,5 @@
 # bl_check
-> DNSBL command line checker utility
+> Console utility for check ip networks in DNSBL
 
 ##  Prerequisites
 
@@ -33,5 +33,7 @@ $ apt install liblwp-protocol-https-perl
 
 Create config file from bl_check.conf.sample.
 
-Add your networks CIDRs
+Add your networks CIDRs or singl ips
+Add DNSBLs as you wish
 
+Run script and wait report
