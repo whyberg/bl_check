@@ -23,7 +23,6 @@ my $fastreport = 0;
 for ( my $i = 0 ; $i <= $#ARGV ; $i++ ) {
     my $valid = $ARGV[$i];
     if ( substr( $ARGV[$i], 0, 1 ) ne '-' ) {
-        push(my @toplevel, $ARGV[$i] );
         $valid = '';
     }
     elsif ( $ARGV[$i] eq '-c' ) {
